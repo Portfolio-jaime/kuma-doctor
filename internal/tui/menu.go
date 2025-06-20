@@ -20,13 +20,13 @@ func ShowInteractiveMenu(outputFormat, outputFile string) error {
 		prompt := &survey.Select{
 			Message: "¿Qué aspecto de Kuma Mesh deseas analizar?",
 			Options: []string{
+				"Generar Reporte Completo", // <-- Nueva opción funcional
 				"Resumen General de Salud",
 				"Estado de todos los Dataplanes (Proxies)",
 				"Consistencia de Políticas de Tráfico (MeshTrafficPermission)",
 				"Configuración de mTLS (Seguridad)",
 				"Políticas de Resiliencia (Retries, Timeouts, etc.)",
 				"Políticas de Observabilidad (Logs, Metrics, Traces)",
-				"Generar Reporte Completo (Próximamente)",
 				"Salir",
 			},
 			PageSize: 10,
@@ -38,6 +38,8 @@ func ShowInteractiveMenu(outputFormat, outputFile string) error {
 		}
 
 		switch choice {
+		case "Generar Reporte Completo":
+			handleFullReportAnalysis(outputFormat, outputFile)
 		case "Resumen General de Salud":
 			handleSummaryAnalysis(outputFormat, outputFile)
 		case "Estado de todos los Dataplanes (Proxies)":
@@ -50,8 +52,6 @@ func ShowInteractiveMenu(outputFormat, outputFile string) error {
 			handleResilienceAnalysis(outputFormat, outputFile)
 		case "Políticas de Observabilidad (Logs, Metrics, Traces)":
 			handleObservabilityAnalysis(outputFormat, outputFile)
-		case "Generar Reporte Completo (Próximamente)":
-			fmt.Println("Esta funcionalidad aún no está implementada.")
 		case "Salir":
 			fmt.Println("¡Hasta luego!")
 			return nil
@@ -60,61 +60,89 @@ func ShowInteractiveMenu(outputFormat, outputFile string) error {
 	}
 }
 
-// --- Funciones Handler (Ahora más limpias gracias a la refactorización) ---
-
-func handleSummaryAnalysis(outputFormat, outputFile string) {
-	fmt.Println("Generando resumen de salud del mesh...")
-	executeAnalysis(analysis.AnalyzeSummary, outputFormat, outputFile)
-}
-
-func handleDataplaneAnalysis(outputFormat, outputFile string) {
-	fmt.Println("Analizando Dataplanes...")
-	executeAnalysis(analysis.AnalyzeDataplanes, outputFormat, outputFile)
-}
-
-func handleTrafficPermissionAnalysis(outputFormat, outputFile string) {
-	fmt.Println("Analizando consistencia de MeshTrafficPermissions...")
-	executeAnalysis(analysis.AnalyzeTrafficPermissions, outputFormat, outputFile)
-}
-
-func handleMTLSAnalysis(outputFormat, outputFile string) {
-	fmt.Println("Analizando configuración de mTLS...")
-	executeAnalysis(analysis.AnalyzeMTLS, outputFormat, outputFile)
-}
-
-func handleResilienceAnalysis(outputFormat, outputFile string) {
-	fmt.Println("Analizando políticas de resiliencia...")
-	executeAnalysis(analysis.AnalyzeResilience, outputFormat, outputFile)
-}
-
-func handleObservabilityAnalysis(outputFormat, outputFile string) {
-	fmt.Println("Analizando políticas de observabilidad...")
-	executeAnalysis(analysis.AnalyzeObservability, outputFormat, outputFile)
-}
-
-// --- Funciones Helper ---
-
-// executeAnalysis es una función genérica para ejecutar cualquier tipo de análisis.
-func executeAnalysis(analysisFunc func(client dynamic.Interface) (*analysis.ValidationResult, error), outputFormat, outputFile string) {
+// --- Nueva función para el Reporte Completo ---
+func handleFullReportAnalysis(outputFormat, outputFile string) {
+	fmt.Println("Generando reporte completo, esto puede tardar un momento...")
 	client, err := kubernetes.NewClient()
 	if err != nil {
 		fmt.Printf("Error al conectar con Kubernetes: %v\n", err)
 		return
 	}
 
+	// Creamos una lista para almacenar todos los resultados
+	var allResults []*analysis.ValidationResult
+
+	// Ejecutamos cada análisis y añadimos su resultado a la lista
+	if result, err := analysis.AnalyzeSummary(client); err == nil {
+		allResults = append(allResults, result)
+	}
+	if result, err := analysis.AnalyzeDataplanes(client); err == nil {
+		allResults = append(allResults, result)
+	}
+	if result, err := analysis.AnalyzeTrafficPermissions(client); err == nil {
+		allResults = append(allResults, result)
+	}
+	if result, err := analysis.AnalyzeMTLS(client); err == nil {
+		allResults = append(allResults, result)
+	}
+	if result, err := analysis.AnalyzeResilience(client); err == nil {
+		allResults = append(allResults, result)
+	}
+	if result, err := analysis.AnalyzeObservability(client); err == nil {
+		allResults = append(allResults, result)
+	}
+
+	// Pasamos la lista completa al generador de reportes
+	generateAndDisplayReport(allResults, outputFormat, outputFile)
+}
+
+// --- Handlers Anteriores (Ahora envuelven el resultado en una lista) ---
+
+func handleSummaryAnalysis(outputFormat, outputFile string) {
+	fmt.Println("Generando resumen de salud del mesh...")
+	executeAnalysis(analysis.AnalyzeSummary, outputFormat, outputFile)
+}
+func handleDataplaneAnalysis(outputFormat, outputFile string) {
+	fmt.Println("Analizando Dataplanes...")
+	executeAnalysis(analysis.AnalyzeDataplanes, outputFormat, outputFile)
+}
+func handleTrafficPermissionAnalysis(outputFormat, outputFile string) {
+	fmt.Println("Analizando consistencia de MeshTrafficPermissions...")
+	executeAnalysis(analysis.AnalyzeTrafficPermissions, outputFormat, outputFile)
+}
+func handleMTLSAnalysis(outputFormat, outputFile string) {
+	fmt.Println("Analizando configuración de mTLS...")
+	executeAnalysis(analysis.AnalyzeMTLS, outputFormat, outputFile)
+}
+func handleResilienceAnalysis(outputFormat, outputFile string) {
+	fmt.Println("Analizando políticas de resiliencia...")
+	executeAnalysis(analysis.AnalyzeResilience, outputFormat, outputFile)
+}
+func handleObservabilityAnalysis(outputFormat, outputFile string) {
+	fmt.Println("Analizando políticas de observabilidad...")
+	executeAnalysis(analysis.AnalyzeObservability, outputFormat, outputFile)
+}
+
+// --- Funciones Helper (Actualizadas para el nuevo Reporter) ---
+
+func executeAnalysis(analysisFunc func(client dynamic.Interface) (*analysis.ValidationResult, error), outputFormat, outputFile string) {
+	client, err := kubernetes.NewClient()
+	if err != nil {
+		fmt.Printf("Error al conectar con Kubernetes: %v\n", err)
+		return
+	}
 	result, err := analysisFunc(client)
 	if err != nil {
 		fmt.Printf("Error durante el análisis: %v\n", err)
 		return
 	}
-
-	generateAndDisplayReport(result, outputFormat, outputFile)
+	// Envolvemos el resultado único en una lista para usar la nueva interfaz del reporter
+	generateAndDisplayReport([]*analysis.ValidationResult{result}, outputFormat, outputFile)
 }
 
-// generateAndDisplayReport es una función de ayuda para evitar duplicar código.
-func generateAndDisplayReport(result *analysis.ValidationResult, outputFormat, outputFile string) {
-	if result == nil || len(result.Findings) == 0 {
-		color.Green("✅ No se encontraron hallazgos problemáticos.")
+func generateAndDisplayReport(results []*analysis.ValidationResult, outputFormat, outputFile string) {
+	if len(results) == 0 {
+		color.Green("✅ No se generaron hallazgos durante el análisis.")
 		return
 	}
 
@@ -124,7 +152,7 @@ func generateAndDisplayReport(result *analysis.ValidationResult, outputFormat, o
 		return
 	}
 
-	output, err := reporter.Generate(result)
+	output, err := reporter.Generate(results)
 	if err != nil {
 		fmt.Printf("Error al generar el reporte: %v\n", err)
 		return

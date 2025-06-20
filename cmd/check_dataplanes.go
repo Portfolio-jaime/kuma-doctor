@@ -34,7 +34,8 @@ var checkDataplanesCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		output, err := reporter.Generate(result)
+		// CAMBIO: Envolvemos 'result' en una lista para que coincida con la nueva interfaz del reporter.
+		output, err := reporter.Generate([]*analysis.ValidationResult{result})
 		if err != nil {
 			fmt.Printf("Error al generar el reporte: %v\n", err)
 			os.Exit(1)
@@ -54,6 +55,5 @@ var checkDataplanesCmd = &cobra.Command{
 }
 
 func init() {
-	// Añadimos el subcomando 'dataplanes' a 'checkCmd'.
 	checkCmd.AddCommand(checkDataplanesCmd)
 }
