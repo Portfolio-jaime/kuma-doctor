@@ -9,6 +9,8 @@ import (
 	"os"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/fatih/color"
+	"k8s.io/client-go/dynamic"
 )
 
 // ShowInteractiveMenu muestra el menú principal y maneja la selección del usuario.
@@ -23,6 +25,8 @@ func ShowInteractiveMenu(outputFormat, outputFile string) error {
 				"Consistencia de Políticas de Tráfico (MeshTrafficPermission)",
 				"Configuración de mTLS (Seguridad)",
 				"Políticas de Resiliencia (Retries, Timeouts, etc.)",
+				"Políticas de Observabilidad (Logs, Metrics, Traces)",
+				"Generar Reporte Completo (Próximamente)",
 				"Salir",
 			},
 			PageSize: 10,
@@ -44,96 +48,61 @@ func ShowInteractiveMenu(outputFormat, outputFile string) error {
 			handleMTLSAnalysis(outputFormat, outputFile)
 		case "Políticas de Resiliencia (Retries, Timeouts, etc.)":
 			handleResilienceAnalysis(outputFormat, outputFile)
+		case "Políticas de Observabilidad (Logs, Metrics, Traces)":
+			handleObservabilityAnalysis(outputFormat, outputFile)
+		case "Generar Reporte Completo (Próximamente)":
+			fmt.Println("Esta funcionalidad aún no está implementada.")
 		case "Salir":
 			fmt.Println("¡Hasta luego!")
 			return nil
 		}
-		fmt.Println("\n---\n") // Separador para la siguiente acción
+		fmt.Println("\n---\n")
 	}
 }
 
-// handleSummaryAnalysis ejecuta la lógica para el Resumen General.
+// --- Funciones Handler (Ahora más limpias gracias a la refactorización) ---
+
 func handleSummaryAnalysis(outputFormat, outputFile string) {
 	fmt.Println("Generando resumen de salud del mesh...")
-	client, err := kubernetes.NewClient()
-	if err != nil {
-		fmt.Printf("Error al conectar con Kubernetes: %v\n", err)
-		return
-	}
-
-	result, err := analysis.AnalyzeSummary(client)
-	if err != nil {
-		fmt.Printf("Error durante el análisis: %v\n", err)
-		return
-	}
-
-	generateAndDisplayReport(result, outputFormat, outputFile)
+	executeAnalysis(analysis.AnalyzeSummary, outputFormat, outputFile)
 }
 
-// handleDataplaneAnalysis ejecuta la lógica para el análisis de Dataplanes.
 func handleDataplaneAnalysis(outputFormat, outputFile string) {
 	fmt.Println("Analizando Dataplanes...")
-	client, err := kubernetes.NewClient()
-	if err != nil {
-		fmt.Printf("Error al conectar con Kubernetes: %v\n", err)
-		return
-	}
-
-	result, err := analysis.AnalyzeDataplanes(client)
-	if err != nil {
-		fmt.Printf("Error durante el análisis: %v\n", err)
-		return
-	}
-
-	generateAndDisplayReport(result, outputFormat, outputFile)
+	executeAnalysis(analysis.AnalyzeDataplanes, outputFormat, outputFile)
 }
 
-// handleTrafficPermissionAnalysis ejecuta la lógica para el análisis de MTPs.
 func handleTrafficPermissionAnalysis(outputFormat, outputFile string) {
 	fmt.Println("Analizando consistencia de MeshTrafficPermissions...")
-	client, err := kubernetes.NewClient()
-	if err != nil {
-		fmt.Printf("Error al conectar con Kubernetes: %v\n", err)
-		return
-	}
-
-	result, err := analysis.AnalyzeTrafficPermissions(client)
-	if err != nil {
-		fmt.Printf("Error durante el análisis: %v\n", err)
-		return
-	}
-
-	generateAndDisplayReport(result, outputFormat, outputFile)
+	executeAnalysis(analysis.AnalyzeTrafficPermissions, outputFormat, outputFile)
 }
 
-// handleMTLSAnalysis ejecuta la lógica para el análisis de mTLS.
 func handleMTLSAnalysis(outputFormat, outputFile string) {
 	fmt.Println("Analizando configuración de mTLS...")
-	client, err := kubernetes.NewClient()
-	if err != nil {
-		fmt.Printf("Error al conectar con Kubernetes: %v\n", err)
-		return
-	}
-
-	result, err := analysis.AnalyzeMTLS(client)
-	if err != nil {
-		fmt.Printf("Error durante el análisis: %v\n", err)
-		return
-	}
-
-	generateAndDisplayReport(result, outputFormat, outputFile)
+	executeAnalysis(analysis.AnalyzeMTLS, outputFormat, outputFile)
 }
 
-// handleResilienceAnalysis ejecuta la lógica para el análisis de políticas de resiliencia.
 func handleResilienceAnalysis(outputFormat, outputFile string) {
 	fmt.Println("Analizando políticas de resiliencia...")
+	executeAnalysis(analysis.AnalyzeResilience, outputFormat, outputFile)
+}
+
+func handleObservabilityAnalysis(outputFormat, outputFile string) {
+	fmt.Println("Analizando políticas de observabilidad...")
+	executeAnalysis(analysis.AnalyzeObservability, outputFormat, outputFile)
+}
+
+// --- Funciones Helper ---
+
+// executeAnalysis es una función genérica para ejecutar cualquier tipo de análisis.
+func executeAnalysis(analysisFunc func(client dynamic.Interface) (*analysis.ValidationResult, error), outputFormat, outputFile string) {
 	client, err := kubernetes.NewClient()
 	if err != nil {
 		fmt.Printf("Error al conectar con Kubernetes: %v\n", err)
 		return
 	}
 
-	result, err := analysis.AnalyzeResilience(client)
+	result, err := analysisFunc(client)
 	if err != nil {
 		fmt.Printf("Error durante el análisis: %v\n", err)
 		return
@@ -143,10 +112,9 @@ func handleResilienceAnalysis(outputFormat, outputFile string) {
 }
 
 // generateAndDisplayReport es una función de ayuda para evitar duplicar código.
-// Toma el resultado del análisis y los flags de output para generar y mostrar/guardar el reporte.
 func generateAndDisplayReport(result *analysis.ValidationResult, outputFormat, outputFile string) {
 	if result == nil || len(result.Findings) == 0 {
-		fmt.Println("No se generaron hallazgos durante el análisis.")
+		color.Green("✅ No se encontraron hallazgos problemáticos.")
 		return
 	}
 

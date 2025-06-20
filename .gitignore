@@ -1,0 +1,54 @@
+# Archivos binarios y ejecutables compilados
+# El resultado de 'go build' o 'go install'
+kuma-doctor
+kuma-doctor.exe
+
+# Directorios de herramientas y dependencias (si se usa 'vendor')
+vendor/
+
+# Archivos de configuración de IDEs y editores
+.idea/
+.vscode/
+*.iml
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de reportes generados (patrones comunes)
+# Puedes ser más específico si es necesario.
+reporte-*.md
+reporte-*.json
+reporte-*.txt
+*.log
+
+# Archivos de entorno (buena práctica incluirlos)
+.env
+.env.*
+!.env.example
+
+# Archivos de GO
+# Archivos de caché de Go
+*.go.sum
+# Archivos de caché de Go mod
+go.sum
+# Archivos de caché de Go build
+*.out
+# Archivos de caché de Go test
+*.test
+# Archivos de caché de Go vet
+*.vet
+# Archivos de caché de Go coverage
+*.cover
+# Archivos de caché de Go install
+*.a
+# Archivos de caché de Go mod tidy
+*.mod
+# Archivos de caché de Go mod vendor
+*.vendor
+# Archivos de caché de Go mod verify
+*.verify
+# Archivos de caché de Go mod graph
+*.graph
+# Archivos de caché de Go mod why
+*.why

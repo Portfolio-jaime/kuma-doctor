@@ -4,6 +4,7 @@ go 1.24.4
 
 require (
 	github.com/AlecAivazis/survey/v2 v2.0.0-00010101000000-000000000000
+	github.com/fatih/color v1.18.0
 	github.com/spf13/cobra v1.8.1
 	k8s.io/apimachinery v0.30.2
 	k8s.io/client-go v0.30.2
@@ -11,7 +12,6 @@ require (
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/fatih/color v1.18.0 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect

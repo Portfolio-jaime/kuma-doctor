@@ -8,6 +8,17 @@ import (
 	"strings"
 	"text/tabwriter"
 	"time"
+
+	"github.com/fatih/color"
+)
+
+// --- Definición de Colores para la Consola ---
+var (
+	green  = color.New(color.FgGreen).SprintfFunc()
+	red    = color.New(color.FgRed).SprintfFunc()
+	yellow = color.New(color.FgYellow).SprintfFunc()
+	cyan   = color.New(color.FgCyan).SprintfFunc()
+	bold   = color.New(color.Bold).SprintFunc()
 )
 
 // Reporter define la interfaz para todos los generadores de reportes.
@@ -29,16 +40,16 @@ func GetReporter(format string) (Reporter, error) {
 	}
 }
 
-// --- Implementación de TextReporter ---
+// --- Implementación de TextReporter (CON COLORES Y REFACTORIZADO) ---
 type TextReporter struct{}
 
 func (r *TextReporter) Generate(result *analysis.ValidationResult) (string, error) {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("--- %s ---\n", result.Title))
+	sb.WriteString(bold(fmt.Sprintf("--- %s ---\n", result.Title)))
 	sb.WriteString(fmt.Sprintf("Fecha: %s\n\n", result.GeneratedAt.Format(time.RFC1123)))
 
 	if len(result.Findings) == 0 {
-		sb.WriteString("No se encontraron hallazgos.\n")
+		sb.WriteString(green("✅ No se encontraron hallazgos problemáticos.\n"))
 		return sb.String(), nil
 	}
 
@@ -47,86 +58,68 @@ func (r *TextReporter) Generate(result *analysis.ValidationResult) (string, erro
 	// Verificamos el tipo de hallazgo para formatearlo correctamente
 	switch result.Findings[0].(type) {
 	case analysis.DataplaneStatus:
-		fmt.Fprintln(w, "NOMBRE\tNAMESPACE\tESTADO\tDETALLES")
-		fmt.Fprintln(w, "------\t---------\t------\t--------")
+		fmt.Fprintln(w, bold("NOMBRE\tNAMESPACE\tESTADO\tDETALLES"))
+		fmt.Fprintln(w, bold("------\t---------\t------\t--------"))
 		for _, finding := range result.Findings {
 			dpStatus, _ := finding.(analysis.DataplaneStatus)
-			var emoji string
+			var statusCell string
 			switch dpStatus.Status {
 			case "Online":
-				emoji = "✅"
+				statusCell = green("✅ Online")
 			case "Offline":
-				emoji = "❌"
+				statusCell = red("❌ Offline")
 			case "Degraded":
-				emoji = "⚠️"
+				statusCell = yellow("⚠️ Degraded")
 			case "Info":
-				emoji = "ℹ️"
+				statusCell = cyan("ℹ️ Info")
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s %s\t%s\n", dpStatus.Name, dpStatus.Namespace, emoji, dpStatus.Status, dpStatus.Details)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", dpStatus.Name, dpStatus.Namespace, statusCell, dpStatus.Details)
 		}
 
 	case analysis.SummaryStatus:
 		summary := result.Findings[0].(analysis.SummaryStatus)
-		fmt.Fprintln(w, "RECURSO\tCANTIDAD\t")
-		fmt.Fprintln(w, "-------\t--------\t")
-		fmt.Fprintf(w, "Meshes\t%d\t\n", summary.TotalMeshes)
+		fmt.Fprintln(w, bold("RECURSO\tCANTIDAD\t"))
+		fmt.Fprintln(w, bold("-------\t--------\t"))
+		fmt.Fprintf(w, "%s\t%d\t\n", "Meshes", summary.TotalMeshes)
 		fmt.Fprintln(w, "\t\t") // Separador visual
-		fmt.Fprintf(w, "Dataplanes Totales\t%d\t\n", summary.TotalDataplanes)
-		fmt.Fprintf(w, "  ✅ En Línea\t%d\t\n", summary.OnlineDataplanes)
-		fmt.Fprintf(w, "  ❌ Fuera de Línea\t%d\t\n", summary.OfflineDataplanes)
-		fmt.Fprintf(w, "  ⚠️ Degradados\t%d\t\n", summary.DegradedDataplanes)
-		fmt.Fprintf(w, "  ℹ️ Informativos\t%d\t\n", summary.InfoDataplanes)
+		fmt.Fprintf(w, "%s\t%d\t\n", "Dataplanes Totales", summary.TotalDataplanes)
+		fmt.Fprintf(w, "  %s\t%d\t\n", green("✅ En Línea"), summary.OnlineDataplanes)
+		fmt.Fprintf(w, "  %s\t%d\t\n", red("❌ Fuera de Línea"), summary.OfflineDataplanes)
+		fmt.Fprintf(w, "  %s\t%d\t\n", yellow("⚠️ Degradados"), summary.DegradedDataplanes)
+		fmt.Fprintf(w, "  %s\t%d\t\n", cyan("ℹ️ Informativos"), summary.InfoDataplanes)
 		fmt.Fprintln(w, "\t\t")
-		fmt.Fprintf(w, "Políticas de Tráfico (MTPs)\t%d\t\n", summary.TotalPolicies)
+		fmt.Fprintf(w, "%s\t%d\t\n", "Políticas de Tráfico (MTPs)", summary.TotalPolicies)
 
-	case analysis.PolicyFinding:
-		fmt.Fprintln(w, "NIVEL\tRECURSO\tMENSAJE")
-		fmt.Fprintln(w, "-----\t-------\t-------")
+	// --- CASE REFACTORIZADO PARA TODOS LOS HALLAZGOS DE POLÍTICAS ---
+	case analysis.PolicyFinding, analysis.MTLSFinding, analysis.ResilienceFinding, analysis.ObservabilityFinding:
+		fmt.Fprintln(w, bold("NIVEL\tRECURSO/TIPO\tMENSAJE"))
+		fmt.Fprintln(w, bold("-----\t------------\t-------"))
 		for _, finding := range result.Findings {
-			policyFinding, _ := finding.(analysis.PolicyFinding)
-			var emoji string
-			switch policyFinding.Level {
+			var level, resource, message string
+
+			// Extraemos los campos comunes de forma genérica
+			switch f := finding.(type) {
+			case analysis.PolicyFinding:
+				level, resource, message = f.Level, f.Resource, f.Message
+			case analysis.MTLSFinding:
+				level, resource, message = f.Level, f.Resource, f.Message
+			case analysis.ResilienceFinding:
+				level, resource, message = f.Level, f.Service, fmt.Sprintf("(%s) %s", f.PolicyType, f.Message)
+			case analysis.ObservabilityFinding:
+				level, resource, message = f.Level, f.Resource, fmt.Sprintf("(%s) %s", f.PolicyType, f.Message)
+			}
+
+			var levelCell string
+			switch level {
 			case "ALERT":
-				emoji = "🚨"
+				levelCell = red("🚨 ALERT")
 			case "WARN":
-				emoji = "⚠️"
+				levelCell = yellow("⚠️ WARN")
 			case "INFO":
-				emoji = "ℹ️"
+				levelCell = green("✅ INFO")
 			}
-			message := strings.ReplaceAll(policyFinding.Message, "\t", " ")
-			fmt.Fprintf(w, "%s %s\t%s\t%s\n", emoji, policyFinding.Level, policyFinding.Resource, message)
-		}
 
-	case analysis.MTLSFinding:
-		fmt.Fprintln(w, "NIVEL\tRECURSO\tMENSAJE")
-		fmt.Fprintln(w, "-----\t-------\t-------")
-		for _, finding := range result.Findings {
-			mtlsFinding, _ := finding.(analysis.MTLSFinding)
-			var emoji string
-			switch mtlsFinding.Level {
-			case "ALERT":
-				emoji = "🚨"
-			case "WARN":
-				emoji = "⚠️"
-			case "INFO":
-				emoji = "✅"
-			}
-			fmt.Fprintf(w, "%s %s\t%s\t%s\n", emoji, mtlsFinding.Level, mtlsFinding.Resource, mtlsFinding.Message)
-		}
-
-	case analysis.ResilienceFinding:
-		fmt.Fprintln(w, "NIVEL\tTIPO DE POLÍTICA\tSERVICIO\tMENSAJE")
-		fmt.Fprintln(w, "-----\t----------------\t--------\t-------")
-		for _, finding := range result.Findings {
-			resilienceFinding, _ := finding.(analysis.ResilienceFinding)
-			var emoji string
-			switch resilienceFinding.Level {
-			case "WARN":
-				emoji = "⚠️"
-			case "INFO":
-				emoji = "✅"
-			}
-			fmt.Fprintf(w, "%s %s\t%s\t%s\t%s\n", emoji, resilienceFinding.Level, resilienceFinding.PolicyType, resilienceFinding.Service, resilienceFinding.Message)
+			fmt.Fprintf(w, "%s\t%s\t%s\n", levelCell, resource, message)
 		}
 	}
 
@@ -134,7 +127,7 @@ func (r *TextReporter) Generate(result *analysis.ValidationResult) (string, erro
 	return sb.String(), nil
 }
 
-// --- Implementación de JsonReporter ---
+// --- Implementación de JsonReporter (sin cambios) ---
 type JsonReporter struct{}
 
 func (r *JsonReporter) Generate(result *analysis.ValidationResult) (string, error) {
@@ -145,7 +138,7 @@ func (r *JsonReporter) Generate(result *analysis.ValidationResult) (string, erro
 	return string(bytes), nil
 }
 
-// --- Implementación de MarkdownReporter ---
+// --- Implementación de MarkdownReporter (completa y refactorizada) ---
 type MarkdownReporter struct{}
 
 func (r *MarkdownReporter) Generate(result *analysis.ValidationResult) (string, error) {
@@ -154,7 +147,7 @@ func (r *MarkdownReporter) Generate(result *analysis.ValidationResult) (string, 
 	sb.WriteString(fmt.Sprintf("**Fecha:** %s\n\n", result.GeneratedAt.Format(time.RFC1123)))
 
 	if len(result.Findings) == 0 {
-		sb.WriteString("No se encontraron hallazgos.\n")
+		sb.WriteString("✅ No se encontraron hallazgos problemáticos.\n")
 		return sb.String(), nil
 	}
 
@@ -188,30 +181,24 @@ func (r *MarkdownReporter) Generate(result *analysis.ValidationResult) (string, 
 		sb.WriteString(fmt.Sprintf("  - ℹ️ **Informativos:** %d\n", summary.InfoDataplanes))
 		sb.WriteString(fmt.Sprintf("- **Políticas de Tráfico (MTPs):** %d\n", summary.TotalPolicies))
 
-	case analysis.PolicyFinding:
-		sb.WriteString("| Nivel | Recurso | Mensaje |\n")
+	case analysis.PolicyFinding, analysis.MTLSFinding, analysis.ResilienceFinding, analysis.ObservabilityFinding:
+		sb.WriteString("| Nivel | Recurso/Tipo | Mensaje |\n")
 		sb.WriteString("|---|---|---|\n")
 		for _, finding := range result.Findings {
-			policyFinding, _ := finding.(analysis.PolicyFinding)
-			var emoji string
-			switch policyFinding.Level {
-			case "ALERT":
-				emoji = "🚨"
-			case "WARN":
-				emoji = "⚠️"
-			case "INFO":
-				emoji = "ℹ️"
-			}
-			sb.WriteString(fmt.Sprintf("| %s %s | `%s` | %s |\n", emoji, policyFinding.Level, policyFinding.Resource, policyFinding.Message))
-		}
+			var level, resource, message, emoji string
 
-	case analysis.MTLSFinding:
-		sb.WriteString("| Nivel | Recurso | Mensaje |\n")
-		sb.WriteString("|---|---|---|\n")
-		for _, finding := range result.Findings {
-			mtlsFinding, _ := finding.(analysis.MTLSFinding)
-			var emoji string
-			switch mtlsFinding.Level {
+			switch f := finding.(type) {
+			case analysis.PolicyFinding:
+				level, resource, message = f.Level, f.Resource, f.Message
+			case analysis.MTLSFinding:
+				level, resource, message = f.Level, f.Resource, f.Message
+			case analysis.ResilienceFinding:
+				level, resource, message = f.Level, f.Service, fmt.Sprintf("_(%s)_ %s", f.PolicyType, f.Message)
+			case analysis.ObservabilityFinding:
+				level, resource, message = f.Level, f.Resource, fmt.Sprintf("_(%s)_ %s", f.PolicyType, f.Message)
+			}
+
+			switch level {
 			case "ALERT":
 				emoji = "🚨"
 			case "WARN":
@@ -219,22 +206,7 @@ func (r *MarkdownReporter) Generate(result *analysis.ValidationResult) (string, 
 			case "INFO":
 				emoji = "✅"
 			}
-			sb.WriteString(fmt.Sprintf("| %s %s | `%s` | %s |\n", emoji, mtlsFinding.Level, mtlsFinding.Resource, mtlsFinding.Message))
-		}
-
-	case analysis.ResilienceFinding:
-		sb.WriteString("| Nivel | Tipo de Política | Servicio | Mensaje |\n")
-		sb.WriteString("|---|---|---|---|\n")
-		for _, finding := range result.Findings {
-			resilienceFinding, _ := finding.(analysis.ResilienceFinding)
-			var emoji string
-			switch resilienceFinding.Level {
-			case "WARN":
-				emoji = "⚠️"
-			case "INFO":
-				emoji = "✅"
-			}
-			sb.WriteString(fmt.Sprintf("| %s %s | `%s` | `%s` | %s |\n", emoji, resilienceFinding.Level, resilienceFinding.PolicyType, resilienceFinding.Service, resilienceFinding.Message))
+			sb.WriteString(fmt.Sprintf("| %s %s | `%s` | %s |\n", emoji, level, resource, message))
 		}
 	}
 
